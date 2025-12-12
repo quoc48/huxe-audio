@@ -1,9 +1,8 @@
-import asyncio
 import os
 
 from flask import Flask, render_template_string, request, send_file
 import google.generativeai as genai  # type: ignore
-import edge_tts
+from gtts import gTTS
 
 app = Flask(__name__)
 
@@ -161,13 +160,10 @@ TEXT TO DISCUSS:
     return response.text
 
 
-async def generate_audio(script):
-    """Convert podcast script to audio using Edge-TTS."""
+def generate_audio(script):
+    """Convert podcast script to audio using gTTS."""
     lines = script.strip().split('\n')
     audio_files = []
-
-    voice_alex = "en-US-GuyNeural"
-    voice_sam = "en-US-JennyNeural"
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -175,18 +171,18 @@ async def generate_audio(script):
             continue
 
         if line.startswith("Alex:"):
-            voice = voice_alex
             text = line.replace("Alex:", "").strip()
+            tld = 'us'  # American accent for Alex
         elif line.startswith("Sam:"):
-            voice = voice_sam
             text = line.replace("Sam:", "").strip()
+            tld = 'co.uk'  # British accent for Sam
         else:
             continue
 
         if text:
             filename = f"temp_audio_{i}.mp3"
-            communicate = edge_tts.Communicate(text, voice)
-            await communicate.save(filename)
+            tts = gTTS(text=text, lang='en', tld=tld)
+            tts.save(filename)
             audio_files.append(filename)
 
     return audio_files
@@ -224,7 +220,7 @@ def index():
 
         try:
             script = create_podcast_script(text)
-            audio_files = asyncio.run(generate_audio(script))
+            audio_files = generate_audio(script)
 
             if not audio_files:
                 return render_template_string(
