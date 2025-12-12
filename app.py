@@ -134,17 +134,27 @@ HTML_TEMPLATE = '''
 
 def create_podcast_script(text):
     """Use Gemini to convert text into a 2-host podcast conversation."""
-    prompt = f"""Convert this text into a short, engaging podcast conversation between two hosts:
-- Host A (Alex): Male voice, asks questions and reacts
-- Host B (Sam): Female voice, explains and provides insights
+    prompt = f"""You are writing a script for a casual, engaging podcast between two friends who are excited about what they're discussing.
 
-Rules:
-- Keep it under 500 words total
-- Make it conversational and natural
-- Start with a brief intro, cover main points, end with a takeaway
+HOSTS:
+- Alex (male): Curious, asks good questions, reacts genuinely with "wow", "wait really?", "that's crazy"
+- Sam (female): Knowledgeable but not preachy, explains things simply, uses phrases like "honestly", "here's the thing", "right?"
+
+STYLE RULES:
+- Sound like real friends talking, NOT a formal interview
+- Include natural reactions: "Oh interesting!", "Hmm", "Wait, so..."
+- Hosts can interrupt or build on each other's points
+- Use casual language: contractions, simple words
+- Add brief moments of humor or surprise
+- Keep energy up - they're genuinely interested in this topic
+
+FORMAT:
+- Keep it under 400 words total
 - Format each line as "Alex: ..." or "Sam: ..."
+- Start with a hook that grabs attention
+- End with a memorable takeaway
 
-Text to convert:
+TEXT TO DISCUSS:
 {text[:4000]}"""
 
     response = model.generate_content(prompt)
