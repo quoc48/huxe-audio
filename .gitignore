@@ -1,0 +1,20 @@
+# Audio files (generated)
+*.mp3
+podcast_output.mp3
+temp_audio_*.mp3
+filelist.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
