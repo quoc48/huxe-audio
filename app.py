@@ -4,7 +4,6 @@ from flask import Flask, render_template_string, request, send_file
 import google.generativeai as genai  # type: ignore
 from gtts import gTTS
 import requests
-import base64
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
@@ -128,6 +127,33 @@ HTML_TEMPLATE = '''
             font-size: 14px;
             margin-top: 8px;
         }
+        .length-section {
+            margin-top: 16px;
+        }
+        .length-label {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+            display: block;
+        }
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #1a1a1a;
+            color: #fff;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+        }
+        select:focus {
+            outline: none;
+            border-color: #0066ff;
+        }
         button {
             width: 100%;
             padding: 16px 32px;
@@ -250,6 +276,16 @@ HTML_TEMPLATE = '''
                 </div>
 
                 <input type="hidden" name="input_type" id="inputType" value="text">
+
+                <div class="length-section">
+                    <label class="length-label">Podcast Length</label>
+                    <select name="length" id="lengthSelect">
+                        <option value="short">Short (~1 min)</option>
+                        <option value="medium" selected>Medium (~3 min)</option>
+                        <option value="long">Long (~5 min)</option>
+                    </select>
+                </div>
+
                 <button type="submit" id="submitBtn">Generate Podcast</button>
             </form>
 
@@ -379,8 +415,16 @@ def extract_text_from_url(url):
         return None
 
 
-def create_podcast_script(text):
+def create_podcast_script(text, length='medium'):
     """Use Gemini to convert text into a 2-host podcast conversation."""
+    # Length settings: word count targets
+    length_config = {
+        'short': {'words': 150, 'duration': '1 minute'},
+        'medium': {'words': 350, 'duration': '3 minutes'},
+        'long': {'words': 600, 'duration': '5 minutes'}
+    }
+    config = length_config.get(length, length_config['medium'])
+
     prompt = f"""You are writing a script for two friends having a casual, exciting conversation about something they just discovered. They're NOT doing a formal interview - they're genuinely reacting to interesting information.
 
 HOSTS:
@@ -411,7 +455,7 @@ STRUCTURE:
 - End: Quick memorable takeaway, maybe a joke
 
 FORMAT:
-- Keep it under 350 words
+- TARGET LENGTH: Around {config['words']} words ({config['duration']} when spoken)
 - Every line must start with "Alex: " or "Sam: "
 - No stage directions, no parentheses, just dialogue
 
@@ -460,21 +504,10 @@ def generate_audio(script):
 
 
 def combine_audio_files(audio_files, output_file):
-    """Combine multiple audio files with pauses between speakers."""
-    # ~400ms of silence as MP3 (minimal valid MP3 with silence)
-    SILENCE_MP3 = base64.b64decode(
-        '//uQxAAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
-        'VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
-        'VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
-        'VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
-    )
-
+    """Combine multiple audio files into one."""
     with open(output_file, 'wb') as outfile:
-        for i, audio in enumerate(audio_files):
+        for audio in audio_files:
             if os.path.exists(audio):
-                # Add silence before all except the first clip
-                if i > 0:
-                    outfile.write(SILENCE_MP3)
                 with open(audio, 'rb') as infile:
                     outfile.write(infile.read())
 
@@ -515,8 +548,11 @@ def index():
                 text=text if input_type == 'text' else '',
                 url=url if input_type == 'url' else '')
 
+        # Get selected length
+        length = request.form.get('length', 'medium')
+
         try:
-            script = create_podcast_script(text)
+            script = create_podcast_script(text, length)
             audio_files = generate_audio(script)
 
             if not audio_files:
@@ -560,4 +596,4 @@ def download_audio(filename):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)
