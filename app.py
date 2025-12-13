@@ -133,27 +133,50 @@ HTML_TEMPLATE = '''
 
 def create_podcast_script(text):
     """Use Gemini to convert text into a 2-host podcast conversation."""
-    prompt = f"""You are writing a script for a casual, engaging podcast between two friends who are excited about what they're discussing.
+    prompt = f"""You are writing a script for two friends having a casual, exciting conversation about something they just discovered. They're NOT doing a formal interview - they're genuinely reacting to interesting information.
 
 HOSTS:
-- Alex (male): Curious, asks good questions, reacts genuinely with "wow", "wait really?", "that's crazy"
-- Sam (female): Knowledgeable but not preachy, explains things simply, uses phrases like "honestly", "here's the thing", "right?"
+- Alex (male): The curious one. Gets excited easily. Asks "wait, really?" and "hold on, so you're saying...". Sometimes interrupts when excited.
+- Sam (female): The explainer. Makes complex things simple. Uses "okay so here's the thing..." and "honestly though...". Laughs easily.
 
-STYLE RULES:
-- Sound like real friends talking, NOT a formal interview
-- Include natural reactions: "Oh interesting!", "Hmm", "Wait, so..."
-- Hosts can interrupt or build on each other's points
-- Use casual language: contractions, simple words
-- Add brief moments of humor or surprise
-- Keep energy up - they're genuinely interested in this topic
+DIALOGUE TECHNIQUES (USE THESE!):
+- Interruptions with "—": "Alex: And the thing is— Sam: —exactly what I was thinking!"
+- Trailing off with "...": "Sam: I mean, it's kind of..."
+- Reactions BEFORE explanations: "Oh wow! So basically..." not just "So basically..."
+- Filler words: "like", "honestly", "I mean", "you know", "right?"
+- One host finishing other's thought: "Alex: So it's like— Sam: —a game changer, yeah."
+- Short rapid exchanges mixed with longer explanations
+- Express emotions: surprise, confusion, humor, excitement
+- Rhetorical questions: "Can you even imagine?", "Wild, right?"
+
+WHAT TO AVOID:
+- Long monologues (max 3 sentences per turn)
+- Formal language ("Furthermore", "Indeed", "It is important to note")
+- Perfect grammar (real people don't speak perfectly)
+- Starting every line the same way
+- Being too educational/lecture-y
+
+STRUCTURE:
+- Hook: Start mid-conversation, like we dropped in on them talking
+- Build: Go back and forth, building excitement
+- Peak: The "wow" moment or key insight
+- End: Quick memorable takeaway, maybe a joke
 
 FORMAT:
-- Keep it under 400 words total
-- Format each line as "Alex: ..." or "Sam: ..."
-- Start with a hook that grabs attention
-- End with a memorable takeaway
+- Keep it under 350 words
+- Every line must start with "Alex: " or "Sam: "
+- No stage directions, no parentheses, just dialogue
 
-TEXT TO DISCUSS:
+EXAMPLE OF GOOD FLOW:
+Alex: Okay wait, I have to tell you about this thing I just read—
+Sam: Oh no, what now? *laughs*
+Alex: No no, it's actually cool! So apparently...
+Sam: Wait, seriously? That's...
+Alex: Right?! And here's the wild part—
+Sam: —there's more?
+Alex: So much more.
+
+NOW CREATE A CONVERSATION ABOUT THIS:
 {text[:4000]}"""
 
     response = model.generate_content(prompt)
