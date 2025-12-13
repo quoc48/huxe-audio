@@ -4,6 +4,7 @@ from flask import Flask, render_template_string, request, send_file
 import google.generativeai as genai  # type: ignore
 from gtts import gTTS
 import requests
+import base64
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
@@ -459,18 +460,28 @@ def generate_audio(script):
 
 
 def combine_audio_files(audio_files, output_file):
-    """Combine multiple audio files into one (no ffmpeg needed)"""
+    """Combine multiple audio files with pauses between speakers."""
+    # ~400ms of silence as MP3 (minimal valid MP3 with silence)
+    SILENCE_MP3 = base64.b64decode(
+        '//uQxAAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
+        'VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
+        'VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
+        'VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
+    )
+
     with open(output_file, 'wb') as outfile:
-        for audio in audio_files:
+        for i, audio in enumerate(audio_files):
             if os.path.exists(audio):
+                # Add silence before all except the first clip
+                if i > 0:
+                    outfile.write(SILENCE_MP3)
                 with open(audio, 'rb') as infile:
                     outfile.write(infile.read())
 
+    # Clean up temp files
     for audio in audio_files:
         if os.path.exists(audio):
             os.remove(audio)
-    if os.path.exists('filelist.txt'):
-        os.remove('filelist.txt')
 
 
 @app.route('/', methods=['GET', 'POST'])
