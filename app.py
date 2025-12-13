@@ -3,6 +3,8 @@ import os
 from flask import Flask, render_template_string, request, send_file
 import google.generativeai as genai  # type: ignore
 from gtts import gTTS
+import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -16,15 +18,15 @@ HTML_TEMPLATE = '''
     <title>Huxe Audio - Text to Podcast</title>
     <style>
         * { box-sizing: border-box; }
-        body { 
+        body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 800px; 
-            margin: 0 auto; 
+            max-width: 800px;
+            margin: 0 auto;
             padding: 40px 20px;
             background: #0f0f0f;
             color: #ffffff;
         }
-        h1 { 
+        h1 {
             text-align: center;
             font-size: 2rem;
             margin-bottom: 0.5rem;
@@ -34,9 +36,50 @@ HTML_TEMPLATE = '''
             color: #888;
             margin-bottom: 2rem;
         }
-        textarea { 
-            width: 100%; 
-            height: 200px; 
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 0;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px 24px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-bottom: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+        .tab:first-child {
+            border-radius: 8px 0 0 0;
+        }
+        .tab:last-child {
+            border-radius: 0 8px 0 0;
+        }
+        .tab.active {
+            background: #252525;
+            color: #fff;
+            border-color: #444;
+        }
+        .tab:hover:not(.active) {
+            background: #222;
+        }
+        .tab-content {
+            display: none;
+            background: #252525;
+            border: 1px solid #444;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            padding: 20px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            height: 180px;
             padding: 16px;
             border: 1px solid #333;
             border-radius: 8px;
@@ -45,11 +88,25 @@ HTML_TEMPLATE = '''
             color: #fff;
             resize: vertical;
         }
-        textarea:focus {
+        textarea:focus, input[type="url"]:focus {
             outline: none;
             border-color: #0066ff;
         }
-        button { 
+        input[type="url"] {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .url-hint {
+            color: #666;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        button {
             width: 100%;
             padding: 16px 32px;
             font-size: 18px;
@@ -61,7 +118,7 @@ HTML_TEMPLATE = '''
             margin-top: 16px;
         }
         button:hover { background: #0052cc; }
-        button:disabled { 
+        button:disabled {
             background: #333;
             cursor: not-allowed;
         }
@@ -71,8 +128,8 @@ HTML_TEMPLATE = '''
             background: #1a1a1a;
             border-radius: 8px;
         }
-        audio { 
-            width: 100%; 
+        audio {
+            width: 100%;
             margin: 16px 0;
         }
         .download-btn {
@@ -82,10 +139,6 @@ HTML_TEMPLATE = '''
             text-align: center;
         }
         .download-btn:hover { background: #16a34a; }
-        .loading {
-            text-align: center;
-            color: #888;
-        }
         .error {
             color: #ff4444;
             padding: 16px;
@@ -97,10 +150,24 @@ HTML_TEMPLATE = '''
 </head>
 <body>
     <h1>Huxe Audio</h1>
-    <p class="subtitle">Paste any text - Get a podcast-style audio</p>
+    <p class="subtitle">Turn any text or article into a podcast</p>
 
     <form method="POST" id="generateForm">
-        <textarea name="text" placeholder="Paste your article, news, or any text here...">{{ text or '' }}</textarea>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('text')">Paste Text</div>
+            <div class="tab" onclick="switchTab('url')">From URL</div>
+        </div>
+
+        <div id="textTab" class="tab-content active">
+            <textarea name="text" id="textInput" placeholder="Paste your article, news, or any text here...">{{ text or '' }}</textarea>
+        </div>
+
+        <div id="urlTab" class="tab-content">
+            <input type="url" name="url" id="urlInput" placeholder="https://example.com/article" value="{{ url or '' }}">
+            <p class="url-hint">Paste any article URL - we'll extract the content automatically</p>
+        </div>
+
+        <input type="hidden" name="input_type" id="inputType" value="text">
         <button type="submit" id="submitBtn">Generate Podcast</button>
     </form>
 
@@ -121,6 +188,24 @@ HTML_TEMPLATE = '''
     {% endif %}
 
     <script>
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'text') {
+                document.querySelector('.tab:first-child').classList.add('active');
+                document.getElementById('textTab').classList.add('active');
+                document.getElementById('inputType').value = 'text';
+                document.getElementById('urlInput').value = '';
+            } else {
+                document.querySelector('.tab:last-child').classList.add('active');
+                document.getElementById('urlTab').classList.add('active');
+                document.getElementById('inputType').value = 'url';
+                document.getElementById('textInput').value = '';
+            }
+        }
+
         document.getElementById('generateForm').onsubmit = function() {
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').textContent = 'Generating... (this takes 30-60 seconds)';
@@ -129,6 +214,37 @@ HTML_TEMPLATE = '''
 </body>
 </html>
 '''
+
+
+def extract_text_from_url(url):
+    """Fetch webpage and extract article text."""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Remove unwanted elements
+        for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside',
+                         'form', 'button', 'iframe', 'noscript']):
+            tag.decompose()
+
+        # Try to find main content
+        article = soup.find('article') or soup.find('main') or soup.find('body')
+
+        if article:
+            # Get text and clean it up
+            text = article.get_text(separator=' ', strip=True)
+            # Remove extra whitespace
+            text = ' '.join(text.split())
+            return text
+
+        return None
+    except Exception as e:
+        return None
 
 
 def create_podcast_script(text):
@@ -229,17 +345,33 @@ def combine_audio_files(audio_files, output_file):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        text = request.form.get('text', '').strip()
+        input_type = request.form.get('input_type', 'text')
+        text = ''
+        url = ''
 
-        if not text:
-            return render_template_string(HTML_TEMPLATE,
-                                          error="Please enter some text")
+        if input_type == 'url':
+            url = request.form.get('url', '').strip()
+            if not url:
+                return render_template_string(HTML_TEMPLATE,
+                                              error="Please enter a URL")
+
+            text = extract_text_from_url(url)
+            if not text:
+                return render_template_string(HTML_TEMPLATE,
+                                              error="Could not extract text from that URL. Try a different article or paste the text directly.",
+                                              url=url)
+        else:
+            text = request.form.get('text', '').strip()
+            if not text:
+                return render_template_string(HTML_TEMPLATE,
+                                              error="Please enter some text")
 
         if len(text) < 50:
             return render_template_string(
                 HTML_TEMPLATE,
-                error="Please enter more text (at least 50 characters)",
-                text=text)
+                error="Not enough content found (need at least 50 characters). Try a different source.",
+                text=text if input_type == 'text' else '',
+                url=url if input_type == 'url' else '')
 
         try:
             script = create_podcast_script(text)
