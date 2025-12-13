@@ -528,57 +528,83 @@ def index():
             url = request.form.get('url', '').strip()
             if not url:
                 return render_template_string(HTML_TEMPLATE,
-                                              error="Please enter a URL")
+                                              error="📝 Please enter a URL to continue.")
 
             text = extract_text_from_url(url)
             if not text:
                 return render_template_string(HTML_TEMPLATE,
-                                              error="Could not extract text from that URL. Try a different article or paste the text directly.",
+                                              error="🔗 Couldn't read that article. The site might be blocking access or the page structure is unusual. Try a different URL or paste the text directly.",
                                               url=url)
         else:
             text = request.form.get('text', '').strip()
             if not text:
                 return render_template_string(HTML_TEMPLATE,
-                                              error="Please enter some text")
+                                              error="📝 Please enter some text to continue.")
 
         if len(text) < 50:
             return render_template_string(
                 HTML_TEMPLATE,
-                error="Not enough content found (need at least 50 characters). Try a different source.",
+                error="📄 Not enough content (need at least 50 characters). Try adding more text or a different source.",
                 text=text if input_type == 'text' else '',
                 url=url if input_type == 'url' else '')
 
         # Get selected length
         length = request.form.get('length', 'medium')
 
+        # Check if API key is configured
+        if not os.environ.get('GEMINI_API_KEY'):
+            return render_template_string(
+                HTML_TEMPLATE,
+                error="⚠️ Gemini API key not configured. Please set the GEMINI_API_KEY environment variable.",
+                text=text if input_type == 'text' else '',
+                url=url if input_type == 'url' else '')
+
+        # Step 1: Generate script with AI
         try:
             script = create_podcast_script(text, length)
-            audio_files = generate_audio(script)
+        except Exception:
+            return render_template_string(
+                HTML_TEMPLATE,
+                error="🤖 AI couldn't generate a script. This might be due to content restrictions or API limits. Try different or shorter content.",
+                text=text if input_type == 'text' else '',
+                url=url if input_type == 'url' else '')
 
+        # Step 2: Convert script to audio
+        try:
+            audio_files = generate_audio(script)
             if not audio_files:
                 return render_template_string(
                     HTML_TEMPLATE,
-                    error="Could not generate audio. Try different text.",
+                    error="🔊 Voice generation produced no audio. The script might be empty or in an unexpected format. Try again.",
                     text=text if input_type == 'text' else '',
                     url=url if input_type == 'url' else '')
+        except Exception:
+            return render_template_string(
+                HTML_TEMPLATE,
+                error="🔊 Voice generation failed. This could be a temporary issue with the text-to-speech service. Please try again.",
+                text=text if input_type == 'text' else '',
+                url=url if input_type == 'url' else '')
 
+        # Step 3: Combine audio files
+        try:
             output_file = "podcast_output.mp3"
             combine_audio_files(audio_files, output_file)
+        except Exception:
+            return render_template_string(
+                HTML_TEMPLATE,
+                error="🎧 Failed to combine audio files. Please try again.",
+                text=text if input_type == 'text' else '',
+                url=url if input_type == 'url' else '')
 
-            # Parse script for display
-            script_lines = parse_script_lines(script)
+        # Parse script for display
+        script_lines = parse_script_lines(script)
 
-            return render_template_string(HTML_TEMPLATE,
-                                          audio_file=output_file,
-                                          script=script,
-                                          script_lines=script_lines,
-                                          text=text if input_type == 'text' else '',
-                                          url=url if input_type == 'url' else '')
-
-        except Exception as e:
-            return render_template_string(HTML_TEMPLATE,
-                                          error=f"Error: {str(e)}",
-                                          text=text)
+        return render_template_string(HTML_TEMPLATE,
+                                      audio_file=output_file,
+                                      script=script,
+                                      script_lines=script_lines,
+                                      text=text if input_type == 'text' else '',
+                                      url=url if input_type == 'url' else '')
 
     return render_template_string(HTML_TEMPLATE)
 
