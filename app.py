@@ -20,7 +20,7 @@ HTML_TEMPLATE = '''
         * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 40px 20px;
             background: #0f0f0f;
@@ -35,6 +35,26 @@ HTML_TEMPLATE = '''
             text-align: center;
             color: #888;
             margin-bottom: 2rem;
+        }
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+        }
+        @media (max-width: 768px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        .input-section, .result-section {
+            min-height: 400px;
+        }
+        .section-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+            margin-bottom: 16px;
         }
         .tabs {
             display: flex;
@@ -51,6 +71,7 @@ HTML_TEMPLATE = '''
             cursor: pointer;
             font-size: 16px;
             transition: all 0.2s;
+            text-align: center;
         }
         .tab:first-child {
             border-radius: 8px 0 0 0;
@@ -122,23 +143,80 @@ HTML_TEMPLATE = '''
             background: #333;
             cursor: not-allowed;
         }
-        .result {
-            margin-top: 32px;
-            padding: 24px;
+        .result-section {
             background: #1a1a1a;
-            border-radius: 8px;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .result-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #444;
+            text-align: center;
+        }
+        .result-placeholder-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .audio-section {
+            margin-bottom: 24px;
         }
         audio {
             width: 100%;
-            margin: 16px 0;
+            margin: 12px 0;
         }
         .download-btn {
             background: #22c55e;
             text-decoration: none;
             display: inline-block;
             text-align: center;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            width: 100%;
         }
         .download-btn:hover { background: #16a34a; }
+        .script-section {
+            margin-top: 24px;
+        }
+        .script-container {
+            background: #0f0f0f;
+            border-radius: 8px;
+            padding: 16px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .script-line {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .script-line.alex {
+            background: rgba(59, 130, 246, 0.15);
+            border-left: 3px solid #3b82f6;
+        }
+        .script-line.sam {
+            background: rgba(168, 85, 247, 0.15);
+            border-left: 3px solid #a855f7;
+        }
+        .script-line .host-name {
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        .script-line.alex .host-name {
+            color: #3b82f6;
+        }
+        .script-line.sam .host-name {
+            color: #a855f7;
+        }
         .error {
             color: #ff4444;
             padding: 16px;
@@ -152,44 +230,77 @@ HTML_TEMPLATE = '''
     <h1>Huxe Audio</h1>
     <p class="subtitle">Turn any text or article into a podcast</p>
 
-    <form method="POST" id="generateForm">
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('text')">Paste Text</div>
-            <div class="tab" onclick="switchTab('url')">From URL</div>
+    <div class="main-container">
+        <div class="input-section">
+            <div class="section-title">Input</div>
+            <form method="POST" id="generateForm">
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab('text')">Paste Text</div>
+                    <div class="tab" onclick="switchTab('url')">From URL</div>
+                </div>
+
+                <div id="textTab" class="tab-content active">
+                    <textarea name="text" id="textInput" placeholder="Paste your article, news, or any text here...">{{ text or '' }}</textarea>
+                </div>
+
+                <div id="urlTab" class="tab-content">
+                    <input type="url" name="url" id="urlInput" placeholder="https://example.com/article" value="{{ url or '' }}">
+                    <p class="url-hint">Paste any article URL - we'll extract the content automatically</p>
+                </div>
+
+                <input type="hidden" name="input_type" id="inputType" value="text">
+                <button type="submit" id="submitBtn">Generate Podcast</button>
+            </form>
+
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
         </div>
 
-        <div id="textTab" class="tab-content active">
-            <textarea name="text" id="textInput" placeholder="Paste your article, news, or any text here...">{{ text or '' }}</textarea>
+        <div class="result-section">
+            <div class="section-title">Output</div>
+
+            {% if audio_file %}
+            <div class="audio-section">
+                <audio controls autoplay>
+                    <source src="/audio/{{ audio_file }}" type="audio/mpeg">
+                </audio>
+                <a href="/download/{{ audio_file }}" style="text-decoration: none;">
+                    <button type="button" class="download-btn">Download MP3</button>
+                </a>
+            </div>
+
+            {% if script %}
+            <div class="script-section">
+                <div class="section-title">Script</div>
+                <div class="script-container">
+                    {% for line in script_lines %}
+                        {% if line.host == 'alex' %}
+                        <div class="script-line alex">
+                            <span class="host-name">Alex:</span>{{ line.text }}
+                        </div>
+                        {% elif line.host == 'sam' %}
+                        <div class="script-line sam">
+                            <span class="host-name">Sam:</span>{{ line.text }}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="result-placeholder">
+                <div class="result-placeholder-icon">🎙️</div>
+                <p>Your podcast will appear here</p>
+                <p style="font-size: 14px;">Paste text or URL, then click Generate</p>
+            </div>
+            {% endif %}
         </div>
-
-        <div id="urlTab" class="tab-content">
-            <input type="url" name="url" id="urlInput" placeholder="https://example.com/article" value="{{ url or '' }}">
-            <p class="url-hint">Paste any article URL - we'll extract the content automatically</p>
-        </div>
-
-        <input type="hidden" name="input_type" id="inputType" value="text">
-        <button type="submit" id="submitBtn">Generate Podcast</button>
-    </form>
-
-    {% if audio_file %}
-    <div class="result">
-        <h3>Your Podcast is Ready!</h3>
-        <audio controls autoplay>
-            <source src="/audio/{{ audio_file }}" type="audio/mpeg">
-        </audio>
-        <a href="/download/{{ audio_file }}" class="download-btn" style="width:100%; margin-top:8px;">
-            <button type="button" class="download-btn">Download MP3</button>
-        </a>
     </div>
-    {% endif %}
-
-    {% if error %}
-    <div class="error">{{ error }}</div>
-    {% endif %}
 
     <script>
         function switchTab(tab) {
-            // Update tab buttons
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
@@ -208,12 +319,32 @@ HTML_TEMPLATE = '''
 
         document.getElementById('generateForm').onsubmit = function() {
             document.getElementById('submitBtn').disabled = true;
-            document.getElementById('submitBtn').textContent = 'Generating... (this takes 30-60 seconds)';
+            document.getElementById('submitBtn').textContent = 'Generating... (30-60 seconds)';
         };
     </script>
 </body>
 </html>
 '''
+
+
+def parse_script_lines(script):
+    """Parse script into structured lines with host identification."""
+    lines = []
+    for line in script.strip().split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('Alex:'):
+            lines.append({
+                'host': 'alex',
+                'text': line.replace('Alex:', '').strip()
+            })
+        elif line.startswith('Sam:'):
+            lines.append({
+                'host': 'sam',
+                'text': line.replace('Sam:', '').strip()
+            })
+    return lines
 
 
 def extract_text_from_url(url):
@@ -381,14 +512,21 @@ def index():
                 return render_template_string(
                     HTML_TEMPLATE,
                     error="Could not generate audio. Try different text.",
-                    text=text)
+                    text=text if input_type == 'text' else '',
+                    url=url if input_type == 'url' else '')
 
             output_file = "podcast_output.mp3"
             combine_audio_files(audio_files, output_file)
 
+            # Parse script for display
+            script_lines = parse_script_lines(script)
+
             return render_template_string(HTML_TEMPLATE,
                                           audio_file=output_file,
-                                          text=text)
+                                          script=script,
+                                          script_lines=script_lines,
+                                          text=text if input_type == 'text' else '',
+                                          url=url if input_type == 'url' else '')
 
         except Exception as e:
             return render_template_string(HTML_TEMPLATE,
